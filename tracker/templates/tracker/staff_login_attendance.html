@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Staff Attendance — MVRS</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);min-height:100vh;font-family:'Nunito',sans-serif;color:#fff;padding:12px}
+.header{text-align:center;padding:20px 0 14px}
+.header h1{font-size:1.4rem;font-weight:900}
+.header p{color:rgba(255,255,255,.6);font-size:.86rem;margin-top:3px}
+.date-chip{display:inline-block;background:rgba(255,255,255,.12);border-radius:20px;padding:4px 14px;font-size:.8rem;font-weight:700;margin-top:6px}
+
+/* Date nav strip */
+.date-nav{max-width:960px;margin:0 auto 14px;display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.date-nav::-webkit-scrollbar{display:none}
+.date-pill{flex-shrink:0;padding:8px 14px;border-radius:20px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);font-size:.76rem;font-weight:700;text-decoration:none;text-align:center;transition:all .15s;cursor:pointer;line-height:1.3}
+.date-pill:hover{background:rgba(255,255,255,.15);color:#fff}
+.date-pill.selected{background:rgba(255,255,255,.25);border-color:#fff;color:#fff}
+.date-pill.today-pill{border-color:#27ae60;color:#a8f0c6}
+.date-pill.today-pill.selected{background:rgba(39,174,96,.3);border-color:#27ae60}
+.date-pill.has-data::after{content:'•';display:block;color:#27ae60;font-size:.8rem;margin-top:0px}
+
+/* Past view banner */
+.past-banner{max-width:960px;margin:0 auto 14px;background:rgba(243,156,18,.18);border:1.5px solid #f39c12;border-radius:12px;padding:11px 16px;text-align:center;font-size:.84rem;font-weight:700;color:#fde8b0}
+
+.summary-bar{max-width:960px;margin:0 auto 16px;background:rgba(255,255,255,.1);backdrop-filter:blur(12px);border:1.5px solid rgba(255,255,255,.18);border-radius:14px;padding:14px 18px}
+.sum-title{font-size:.7rem;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;text-align:center}
+.sum-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.sum-pill{display:flex;flex-direction:column;align-items:center;border-radius:12px;padding:10px 16px;min-width:80px;flex:1;cursor:pointer;transition:transform .12s,box-shadow .12s;user-select:none}
+.sum-pill:hover{transform:scale(1.04);box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.sum-pill:active{transform:scale(.97)}
+.sum-pill.full{background:rgba(39,174,96,.25);border:1.5px solid #27ae60}
+.sum-pill.half{background:rgba(243,156,18,.22);border:1.5px solid #f39c12}
+.sum-pill.absent{background:rgba(231,76,60,.22);border:1.5px solid #e74c3c}
+.sum-pill.total{background:rgba(52,152,219,.22);border:1.5px solid #3498db;cursor:default}
+.sum-pill.total:hover{transform:none;box-shadow:none}
+.sum-pill .s-num{font-size:1.3rem;font-weight:900;line-height:1}
+.sum-pill .s-lbl{font-size:.65rem;font-weight:700;opacity:.75;text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+.sum-pill.full .s-num{color:#a8f0c6}
+.sum-pill.half .s-num{color:#fde8b0}
+.sum-pill.absent .s-num{color:#f5b7b1}
+.sum-pill.total .s-num{color:#aed6f1;font-size:1rem}
+.sum-pill .s-hint{font-size:.58rem;opacity:.45;margin-top:2px}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .18s}
+.modal-overlay.active{opacity:1;pointer-events:all}
+.modal-box{background:linear-gradient(135deg,#1a2f3a,#243b4a);border-radius:16px;padding:20px 22px;max-width:400px;width:100%;max-height:80vh;overflow-y:auto;border:1.5px solid rgba(255,255,255,.18);box-shadow:0 16px 40px rgba(0,0,0,.5);transform:translateY(20px);transition:transform .18s}
+.modal-overlay.active .modal-box{transform:translateY(0)}
+.modal-title{font-size:1rem;font-weight:900;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.modal-close{margin-left:auto;background:rgba(255,255,255,.1);border:none;color:#fff;border-radius:8px;padding:4px 10px;font-size:.9rem;cursor:pointer;font-family:inherit;font-weight:700}
+.modal-close:hover{background:rgba(255,255,255,.2)}
+.member-list{list-style:none}
+.member-list li{padding:9px 12px;border-radius:10px;background:rgba(255,255,255,.07);margin-bottom:6px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:8px}
+.member-list li .role-badge{font-size:.66rem;font-weight:600;opacity:.55;text-transform:uppercase;letter-spacing:.5px;margin-left:auto}
+.modal-empty{color:rgba(255,255,255,.4);font-size:.85rem;text-align:center;padding:20px 0}
+.remaining-note{margin-top:12px;padding:10px 14px;background:rgba(255,255,255,.07);border-radius:10px;font-size:.8rem;color:rgba(255,255,255,.55);text-align:center}
+.remaining-note strong{color:rgba(255,255,255,.8)}
+.success-bar{background:#27ae60;border-radius:10px;padding:11px 18px;text-align:center;font-weight:700;font-size:.9rem;margin:0 auto 14px;max-width:960px;display:block;box-shadow:0 4px 12px rgba(39,174,96,.4)}
+.staff-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;max-width:960px;margin:0 auto}
+.staff-card{background:rgba(255,255,255,.09);backdrop-filter:blur(10px);border-radius:14px;padding:16px 18px;border:1.5px solid rgba(255,255,255,.12);transition:transform .15s}
+.staff-card:active{transform:scale(.98)}
+
+/* Past record card */
+.staff-card.past-card{opacity:.92}
+.past-status{display:inline-flex;align-items:center;gap:6px;border-radius:20px;padding:7px 14px;font-size:.84rem;font-weight:800;margin-bottom:10px}
+.past-status.full{background:rgba(39,174,96,.3);border:1.5px solid #27ae60;color:#a8f0c6}
+.past-status.half{background:rgba(243,156,18,.3);border:1.5px solid #f39c12;color:#fde8b0}
+.past-status.absent{background:rgba(231,76,60,.3);border:1.5px solid #e74c3c;color:#f5b7b1}
+.past-status.unmarked{background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);color:rgba(255,255,255,.5)}
+
+.staff-name{font-size:1rem;font-weight:800;margin-bottom:2px}
+.staff-role{font-size:.72rem;font-weight:600;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.7px;margin-bottom:12px}
+.salary-info{font-size:.75rem;color:rgba(255,255,255,.4);margin-bottom:10px}
+.att-options{display:flex;gap:6px;margin-bottom:12px}
+.att-btn{flex:1;padding:10px 4px;border-radius:10px;border:2px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.6);font-family:inherit;font-size:.76rem;font-weight:700;cursor:pointer;transition:all .15s;text-align:center;line-height:1.3}
+.att-btn:active{transform:scale(.95)}
+.att-btn.sel-full{background:#27ae60;border-color:#27ae60;color:#fff;box-shadow:0 3px 10px rgba(39,174,96,.4)}
+.att-btn.sel-half{background:#f39c12;border-color:#f39c12;color:#fff;box-shadow:0 3px 10px rgba(243,156,18,.4)}
+.att-btn.sel-absent{background:#e74c3c;border-color:#e74c3c;color:#fff;box-shadow:0 3px 10px rgba(231,76,60,.4)}
+.submit-btn{width:100%;padding:11px;border-radius:10px;border:none;background:rgba(255,255,255,.15);color:#fff;font-family:inherit;font-size:.88rem;font-weight:700;cursor:pointer;transition:all .15s}
+.submit-btn:hover{background:rgba(255,255,255,.25)}
+.marked-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(39,174,96,.25);border:1.5px solid #27ae60;border-radius:20px;padding:3px 10px;font-size:.72rem;font-weight:700;color:#a8f0c6;margin-bottom:8px}
+.back-link{display:block;text-align:center;margin-top:20px;color:rgba(255,255,255,.45);font-size:.8rem;text-decoration:none;padding-bottom:16px}
+.empty-past{text-align:center;color:rgba(255,255,255,.4);padding:40px;grid-column:1/-1;font-size:.9rem}
+@media(max-width:400px){
+  .staff-grid{grid-template-columns:1fr}
+  .att-btn{font-size:.72rem;padding:9px 2px}
+  body{padding:8px}
+  .sum-pill{min-width:60px;padding:8px 10px}
+  .sum-pill .s-num{font-size:1.1rem}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🍛 MV Royal Spice</h1>
+  <p>Staff Attendance Portal</p>
+  <div class="date-chip">📅 {{ today|date:"l, d M Y" }}</div>
+</div>
+
+{% if success_msg %}
+<div class="success-bar">✅ {{ success_msg }}</div>
+{% endif %}
+
+<!-- Date Navigation Strip -->
+<div class="date-nav">
+  {% for hd in history_dates %}
+  <a href="?date={{ hd.date|date:'Y-m-d' }}"
+    class="date-pill {% if hd.is_selected %}selected{% endif %} {% if hd.is_today %}today-pill{% endif %} {% if hd.has_data %}has-data{% endif %}">
+    {% if hd.is_today %}Today{% else %}{{ hd.date|date:"d M" }}{% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+<!-- Past date notice -->
+{% if not is_today %}
+<div class="past-banner">
+  📋 Viewing records for {{ selected_date|date:"l, d M Y" }} — read only
+</div>
+{% endif %}
+
+<!-- SUMMARY BAR -->
+<div class="summary-bar">
+  <div class="sum-title">📊 {% if is_today %}Today's{% else %}{{ selected_date|date:"d M" }}'s{% endif %} Attendance Summary</div>
+  <div class="sum-row">
+    <div class="sum-pill full" onclick="showModal('full_day')">
+      <span class="s-num" id="cnt-full">0</span>
+      <span class="s-lbl">☀️ Full Day</span>
+      {% if is_today %}<span class="s-hint">tap to view</span>{% endif %}
+    </div>
+    <div class="sum-pill half" onclick="showModal('half_day')">
+      <span class="s-num" id="cnt-half">0</span>
+      <span class="s-lbl">🌤 Half Day</span>
+      {% if is_today %}<span class="s-hint">tap to view</span>{% endif %}
+    </div>
+    <div class="sum-pill absent" onclick="showModal('absent')">
+      <span class="s-num" id="cnt-absent">0</span>
+      <span class="s-lbl">❌ Absent</span>
+      {% if is_today %}<span class="s-hint">tap to view</span>{% endif %}
+    </div>
+    <div class="sum-pill total">
+      <span class="s-num" id="total-amt">₹0</span>
+      <span class="s-lbl">💰 Total Pay</span>
+    </div>
+  </div>
+</div>
+
+<div class="staff-grid">
+  {% if is_today %}
+  <!-- TODAY: mark attendance mode -->
+  {% for p in payments %}
+  <div class="staff-card" id="card_{{ p.id }}">
+    <div class="staff-name">{{ p.staff.name }}</div>
+    <div class="staff-role">{{ p.staff.get_role_display }}</div>
+
+    {% if p.staff_submitted %}
+    <div class="marked-badge">✓ Marked:
+      {% if p.attendance_status == 'full_day' %}Full Day
+      {% elif p.attendance_status == 'half_day' %}Half Day
+      {% else %}Absent{% endif %}
+    </div>
+    {% endif %}
+
+    <div class="salary-info">Fixed Salary: ₹{{ p.staff.fixed_salary|floatformat:0 }}</div>
+
+    <form method="post" onsubmit="saveScroll()">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="staff_mark_attendance">
+      <input type="hidden" name="staff_id" value="{{ p.staff.id }}">
+      <input type="hidden" name="attendance_status" id="att_{{ p.id }}" value="{{ p.attendance_status }}">
+
+      <div class="att-options">
+        <button type="button" class="att-btn {% if p.attendance_status == 'full_day' %}sel-full{% endif %}"
+          id="btn_full_{{ p.id }}" onclick="selectAtt('{{ p.id }}','full_day')">
+          ☀️<br>Full Day
+        </button>
+        <button type="button" class="att-btn {% if p.attendance_status == 'half_day' %}sel-half{% endif %}"
+          id="btn_half_{{ p.id }}" onclick="selectAtt('{{ p.id }}','half_day')">
+          🌤<br>Half Day
+        </button>
+        <button type="button" class="att-btn {% if p.attendance_status == 'absent' %}sel-absent{% endif %}"
+          id="btn_absent_{{ p.id }}" onclick="selectAtt('{{ p.id }}','absent')">
+          ❌<br>Absent
+        </button>
+      </div>
+      <button type="submit" class="submit-btn">Mark Attendance</button>
+    </form>
+  </div>
+  {% empty %}
+  <div class="empty-past">No staff members found for today.</div>
+  {% endfor %}
+
+  {% else %}
+  <!-- PAST DATE: read-only view -->
+  {% for p in payments %}
+  <div class="staff-card past-card">
+    <div class="staff-name">{{ p.staff.name }}</div>
+    <div class="staff-role">{{ p.staff.get_role_display }}</div>
+    <div class="salary-info">Fixed Salary: ₹{{ p.staff.fixed_salary|floatformat:0 }}</div>
+    <div class="past-status {% if p.attendance_status == 'full_day' %}full{% elif p.attendance_status == 'half_day' %}half{% else %}absent{% endif %}">
+      {% if p.attendance_status == 'full_day' %}☀️ Full Day
+      {% elif p.attendance_status == 'half_day' %}🌤 Half Day
+      {% else %}❌ Absent{% endif %}
+    </div>
+    {% if p.staff_submitted %}
+    <div style="font-size:.72rem;color:rgba(255,255,255,.45);margin-top:4px">✓ Self-submitted</div>
+    {% endif %}
+  </div>
+  {% empty %}
+  <div class="empty-past">
+    📭 No attendance records for {{ selected_date|date:"d M Y" }}.<br>
+    <span style="font-size:.8rem;margin-top:6px;display:block">Records are saved only for days when attendance was marked.</span>
+  </div>
+  {% endfor %}
+  {% endif %}
+</div>
+
+<a class="back-link" href="{% url 'login' %}">← Logout</a>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModalOnBg(event)">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span id="modal-icon"></span>
+      <span id="modal-heading"></span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <ul class="member-list" id="modal-list"></ul>
+    <div class="modal-empty" id="modal-empty" style="display:none">No members in this category yet.</div>
+    <div class="remaining-note" id="modal-remaining" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+var isToday = {{ is_today|yesno:"true,false" }};
+var staffData = {
+  {% for p in payments %}"{{ p.id }}":{"salary":{{ p.staff.fixed_salary|floatformat:0 }},"status":"{{ p.attendance_status }}","name":"{{ p.staff.name }}","role":"{{ p.staff.get_role_display }}","submitted":{{ p.staff_submitted|yesno:"true,false" }}}{% if not forloop.last %},{% endif %}{% endfor %}
+};
+
+function selectAtt(pid, val){
+  document.getElementById('att_'+pid).value = val;
+  ['full','half','absent'].forEach(function(t){
+    document.getElementById('btn_'+t+'_'+pid).className = 'att-btn';
+  });
+  var map = {full_day:'full',half_day:'half',absent:'absent'};
+  var cls = {full_day:'sel-full',half_day:'sel-half',absent:'sel-absent'};
+  document.getElementById('btn_'+map[val]+'_'+pid).className = 'att-btn '+cls[val];
+  staffData[pid].status = val;
+  updateSummary();
+}
+
+function updateSummary(){
+  var full=0, half=0, absent=0, total=0;
+  for(var pid in staffData){
+    var d=staffData[pid], s=parseFloat(d.salary)||0;
+    // For past days show all records; for today show submitted only in counters
+    if(isToday && !d.submitted) continue;
+    if(d.status==='full_day'){full++;total+=s;}
+    else if(d.status==='half_day'){half++;total+=s/2;}
+    else if(d.status==='absent'){absent++;}
+  }
+  document.getElementById('cnt-full').textContent=full;
+  document.getElementById('cnt-half').textContent=half;
+  document.getElementById('cnt-absent').textContent=absent;
+  document.getElementById('total-amt').textContent='₹'+Math.round(total).toLocaleString('en-IN');
+}
+
+var MODAL_CONFIG = {
+  full_day:  {icon:'☀️', label:'Full Day Members',  color:'#a8f0c6'},
+  half_day:  {icon:'🌤', label:'Half Day Members',  color:'#fde8b0'},
+  absent:    {icon:'❌', label:'Absent Members',    color:'#f5b7b1'},
+};
+
+function showModal(category){
+  var cfg = MODAL_CONFIG[category];
+  var members = [];
+  var unsubmitted = [];
+
+  for(var pid in staffData){
+    var d = staffData[pid];
+    var countThis = isToday ? d.submitted : true;
+    if(countThis && d.status === category) members.push({name:d.name, role:d.role});
+    if(isToday && !d.submitted) unsubmitted.push(d.name);
+  }
+
+  document.getElementById('modal-icon').textContent = cfg.icon;
+  document.getElementById('modal-heading').textContent = cfg.label + ' (' + members.length + ')';
+
+  var list = document.getElementById('modal-list');
+  var empty = document.getElementById('modal-empty');
+  list.innerHTML = '';
+
+  if(members.length === 0){
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    members.forEach(function(m){
+      var li = document.createElement('li');
+      li.style.color = cfg.color;
+      li.innerHTML = '👤 ' + m.name + '<span class="role-badge">' + m.role + '</span>';
+      list.appendChild(li);
+    });
+  }
+
+  var rem = document.getElementById('modal-remaining');
+  if(isToday){
+    if(unsubmitted.length > 0){
+      rem.innerHTML = '<strong>' + unsubmitted.length + ' not yet submitted:</strong><br>' + unsubmitted.join(', ');
+    } else {
+      rem.innerHTML = '✅ All staff attendance submitted!';
+    }
+    rem.style.display = 'block';
+  } else {
+    rem.style.display = 'none';
+  }
+
+  document.getElementById('modal-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal(){
+  document.getElementById('modal-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function closeModalOnBg(e){
+  if(e.target === document.getElementById('modal-overlay')) closeModal();
+}
+
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeModal(); });
+
+function saveScroll(){
+  sessionStorage.setItem('mvrs_scroll', window.scrollY||window.pageYOffset);
+}
+
+window.addEventListener('load', function(){
+  updateSummary();
+  var sy = sessionStorage.getItem('mvrs_scroll');
+  if(sy){ window.scrollTo(0,parseInt(sy)); sessionStorage.removeItem('mvrs_scroll'); }
+});
+</script>
+</body>
+</html>

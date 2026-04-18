@@ -1,0 +1,97 @@
+{% extends 'tracker/base.html' %}
+{% block content %}
+
+<!-- Banner -->
+<div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:18px 20px;margin-bottom:16px">
+  <div style="font-size:.72rem;color:#aaa;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">📅 {{ today|date:"l, d M Y" }}</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+    <div>
+      <div style="font-size:.9rem;color:#ddd;font-weight:600">Today's Vendor Cost</div>
+      <div style="font-size:.75rem;color:#777;margin-top:4px">✅ {{ done_count }} of {{ vendor_data|length }} vendors completed</div>
+    </div>
+    <div style="font-size:2.4rem;font-weight:900;color:#e94560;line-height:1">₹{{ grand_total|floatformat:0 }}</div>
+  </div>
+</div>
+
+<!-- Add Vendor -->
+<div class="card">
+  <h2>➕ Add New Vendor</h2>
+  <form method="post" style="display:flex;gap:10px">{% csrf_token %}
+    <input type="hidden" name="action" value="add_vendor">
+    <input type="text" name="name" placeholder="Vendor name" required style="flex:1">
+    <button type="submit" class="btn btn-primary" style="white-space:nowrap">Add</button>
+  </form>
+</div>
+
+<!-- Vendor Cards -->
+<div class="grid3">
+  {% for vd in vendor_data %}
+  <div style="border-radius:10px;overflow:hidden;
+    {% if vd.done %}background:linear-gradient(135deg,#d5f5e3,#a9dfbf);border:2px solid #27ae60;
+    {% else %}background:#fff;border:2px solid #eee;{% endif %}
+    box-shadow:0 2px 8px rgba(0,0,0,.07)">
+
+    <!-- Top part: clickable link to vendor detail -->
+    <a href="{% url 'vendor_detail' vd.vendor.id %}" style="text-decoration:none;display:block;padding:16px 18px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:1rem;font-weight:700;color:#1a1a2e">{{ vd.vendor.name }}</div>
+        {% if vd.done %}
+        <span style="background:#27ae60;color:#fff;border-radius:12px;padding:3px 9px;font-size:.7rem;font-weight:700">✓ DONE</span>
+        {% else %}
+        <span style="background:#f0f0f0;color:#aaa;border-radius:12px;padding:3px 9px;font-size:.7rem;font-weight:600">PENDING</span>
+        {% endif %}
+      </div>
+      <div style="display:flex;gap:14px">
+        <div>
+          <div style="font-size:.68rem;color:{% if vd.done %}#1e8449{% else %}#aaa{% endif %};font-weight:600;text-transform:uppercase;letter-spacing:.3px">Items</div>
+          <div style="font-size:1.4rem;font-weight:800;color:{% if vd.done %}#1e8449{% else %}#ccc{% endif %}">{{ vd.today_count }}</div>
+        </div>
+        <div style="width:1px;background:{% if vd.done %}#a9dfbf{% else %}#eee{% endif %}"></div>
+        <div>
+          <div style="font-size:.68rem;color:{% if vd.done %}#1e8449{% else %}#aaa{% endif %};font-weight:600;text-transform:uppercase;letter-spacing:.3px">Total Bill</div>
+          <div style="font-size:1.4rem;font-weight:800;color:{% if vd.done %}#1e8449{% else %}#ccc{% endif %}">{% if vd.done %}₹{{ vd.today_total|floatformat:0 }}{% else %}—{% endif %}</div>
+        </div>
+      </div>
+      <div style="font-size:.72rem;color:{% if vd.done %}#1e8449{% else %}#bbb{% endif %};margin-top:8px">
+        {{ vd.vendor.subcategories.count }} items · tap to manage →
+      </div>
+    </a>
+
+    <!-- Bottom part: Amount Paid box -->
+    <div style="padding:10px 14px 14px;border-top:1px solid {% if vd.done %}#a9dfbf{% else %}#eee{% endif %};background:rgba(255,255,255,.55)">
+      <form method="post" style="display:flex;gap:8px;align-items:flex-end">{% csrf_token %}
+        <input type="hidden" name="action" value="save_vendor_payment">
+        <input type="hidden" name="vendor_id" value="{{ vd.vendor.id }}">
+        <input type="hidden" name="pay_date" value="{{ today|date:'Y-m-d' }}">
+        <div style="flex:1">
+          <label style="font-size:.68rem;color:#666;font-weight:700;display:block;margin-bottom:3px">💳 Amount Paid (₹)</label>
+          <input type="number" name="amount_paid" step="0.01" min="0"
+            value="{{ vd.amount_paid|floatformat:2 }}" placeholder="0.00"
+            style="width:100%;padding:7px 10px;border:1.5px solid #ddd;border-radius:7px;font-size:.9rem;font-weight:700;outline:none">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm" style="white-space:nowrap;padding:7px 12px">💾</button>
+      </form>
+
+      <!-- Balance indicator -->
+      {% if vd.done %}
+      <div style="margin-top:8px;padding:6px 10px;border-radius:7px;text-align:center;font-size:.78rem;font-weight:800;
+        {% if vd.balance < 0 %}background:#fdecea;color:#c0392b;border:1px solid #f5b7b1;
+        {% elif vd.balance > 0 %}background:#d5f5e3;color:#1e8449;border:1px solid #a9dfbf;
+        {% else %}background:#f0f0f0;color:#888;border:1px solid #ddd;{% endif %}">
+        {% if vd.balance < 0 %}
+          ⚠️ Still to pay: ₹{{ vd.balance|floatformat:0|slice:"1:" }}
+        {% elif vd.balance > 0 %}
+          ✅ Overpaid by: ₹{{ vd.balance|floatformat:0 }}
+        {% else %}
+          ⚖️ Fully Settled
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+  {% empty %}
+  <p style="color:#aaa;grid-column:1/-1;padding:20px 0">No vendors yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,354 @@
+{% extends 'tracker/base.html' %}
+{% block content %}
+
+<!-- Header -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+  <h1 style="font-size:1.15rem;font-weight:700;color:#1a1a2e">
+    📊 Dashboard
+    {% if not is_today %}
+    <span style="background:#fff3cd;color:#856404;font-size:.72rem;padding:3px 9px;border-radius:12px;margin-left:6px;font-weight:600">Past Date</span>
+    {% endif %}
+  </h1>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <form method="get" style="display:flex;align-items:center;gap:6px">
+      <input type="date" name="date" value="{{ selected_date|date:'Y-m-d' }}"
+        max="{{ today|date:'Y-m-d' }}"
+        style="border:1.5px solid #ddd;border-radius:7px;padding:7px 10px;font-size:.86rem;outline:none;width:auto"
+        onchange="this.form.submit()">
+      {% if not is_today %}
+      <a href="/" style="font-size:.8rem;color:#e94560;text-decoration:none;font-weight:600;white-space:nowrap">← Today</a>
+      {% endif %}
+    </form>
+    <form method="post" onsubmit="return confirm('Reset all data for this day? Carry Forward kept.')">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="reset_day">
+      <button type="submit" class="btn btn-danger btn-sm">🔄 Reset</button>
+    </form>
+  </div>
+</div>
+
+<!-- Stat boxes -->
+<div class="grid4" style="margin-bottom:16px">
+  <div class="stat-box">
+    <div class="label">💰 Earnings</div>
+    <div class="value neutral">₹{{ finance.total_earnings|floatformat:0 }}</div>
+  </div>
+  <div class="stat-box">
+    <div class="label">📉 Deductions</div>
+    <div class="value loss">₹{{ finance.total_deductions|floatformat:0 }}</div>
+  </div>
+  <div class="stat-box">
+    <div class="label">🔄 Carry Fwd</div>
+    <div class="value" style="color:#8e44ad">₹{{ finance.carry_forward|floatformat:0 }}</div>
+  </div>
+  <div class="stat-box" style="background:{% if finance.net_profit >= 0 %}#d5f5e3{% else %}#fdecea{% endif %}">
+    <div class="label">🏁 Net Profit</div>
+    <div class="value {% if finance.net_profit >= 0 %}profit{% else %}loss{% endif %}">₹{{ finance.net_profit|floatformat:0 }}</div>
+  </div>
+</div>
+
+{% if vendor_summary %}
+<!-- Vendor Purchase Payments -->
+<div class="card" style="margin-bottom:16px;border:2px solid #e8e8e8">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+    <h2 style="margin:0">🛒 Vendor Purchases — {{ selected_date|date:"d M Y" }}</h2>
+    <a href="{% url 'vendors' %}" style="font-size:.78rem;color:#2980b9;font-weight:600;text-decoration:none">Manage →</a>
+  </div>
+
+  <!-- Per vendor rows: name | items | total bill | amount paid input | balance badge -->
+  {% for vs in vendor_summary %}
+  <div style="border:1.5px solid #eee;border-radius:10px;margin-bottom:10px;overflow:hidden">
+
+    <!-- Vendor name bar -->
+    <div style="padding:8px 12px;background:#f8f9fa;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+      <div style="font-size:.92rem;font-weight:800;color:#1a1a2e">{{ vs.name }}</div>
+      <div style="display:flex;gap:14px">
+        <div style="text-align:center">
+          <div style="font-size:.62rem;color:#aaa;font-weight:700;text-transform:uppercase">No. of Items</div>
+          <div style="font-size:1rem;font-weight:900;color:#555">{{ vs.item_count }}</div>
+        </div>
+        <div style="width:1px;background:#eee"></div>
+        <div style="text-align:center">
+          <div style="font-size:.62rem;color:#aaa;font-weight:700;text-transform:uppercase">Total Bill</div>
+          <div style="font-size:1rem;font-weight:900;color:#e74c3c">₹{{ vs.total_bill|floatformat:0 }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payment input + balance -->
+    <div style="padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff">
+      <form method="post" style="display:flex;align-items:center;gap:8px;flex:1;min-width:180px">{% csrf_token %}
+        <input type="hidden" name="action" value="save_vendor_payment">
+        <input type="hidden" name="vendor_id" value="{{ vs.vendor_id }}">
+        <input type="hidden" name="pay_date" value="{{ selected_date|date:'Y-m-d' }}">
+        <label style="font-size:.72rem;color:#666;font-weight:700;white-space:nowrap">💳 Amount Paid</label>
+        <input type="number" name="amount_paid" step="0.01" min="0"
+          value="{{ vs.amount_paid|floatformat:2 }}" placeholder="0.00"
+          style="flex:1;min-width:90px;padding:7px 10px;border:1.5px solid #ddd;border-radius:7px;font-size:.9rem;font-weight:700;outline:none">
+        <button type="submit" class="btn btn-primary btn-sm" style="white-space:nowrap">💾 Save</button>
+      </form>
+
+      <!-- Balance badge -->
+      <div style="padding:7px 14px;border-radius:8px;text-align:center;font-weight:800;font-size:.82rem;white-space:nowrap;
+        {% if vs.balance < 0 %}background:#fdecea;color:#c0392b;border:1.5px solid #e74c3c;
+        {% elif vs.balance > 0 %}background:#d5f5e3;color:#1e8449;border:1.5px solid #27ae60;
+        {% else %}background:#f0f0f0;color:#888;border:1.5px solid #ddd;{% endif %}">
+        {% if vs.balance < 0 %}
+          🔴 Pay ₹{{ vs.balance|floatformat:0|slice:"1:" }} more
+        {% elif vs.balance > 0 %}
+          🟢 Paid ₹{{ vs.balance|floatformat:0 }} extra
+        {% else %}
+          ✅ Settled
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+  {% endfor %}
+
+  <!-- Grand totals row -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px">
+    <div style="background:#fdecea;border-radius:8px;padding:10px;text-align:center;border:1.5px solid #e74c3c">
+      <div style="font-size:.64rem;color:#c0392b;font-weight:700;text-transform:uppercase;margin-bottom:3px">🧾 Total Bill</div>
+      <div style="font-size:1.2rem;font-weight:900;color:#c0392b">₹{{ dash_total_bill|floatformat:0 }}</div>
+    </div>
+    <div style="background:#eafaf1;border-radius:8px;padding:10px;text-align:center;border:1.5px solid #27ae60">
+      <div style="font-size:.64rem;color:#1e8449;font-weight:700;text-transform:uppercase;margin-bottom:3px">✅ Total Paid</div>
+      <div style="font-size:1.2rem;font-weight:900;color:#1e8449">₹{{ dash_total_paid|floatformat:0 }}</div>
+    </div>
+    <div style="border-radius:8px;padding:10px;text-align:center;
+      {% if dash_total_remaining <= 0 %}background:#eafaf1;border:1.5px solid #27ae60;{% else %}background:#fdecea;border:1.5px solid #e74c3c;{% endif %}">
+      <div style="font-size:.64rem;font-weight:700;text-transform:uppercase;margin-bottom:3px;
+        {% if dash_total_remaining <= 0 %}color:#1e8449;{% else %}color:#c0392b;{% endif %}">
+        {% if dash_total_remaining <= 0 %}🟢 Extra Paid{% else %}🔴 Still Owe{% endif %}
+      </div>
+      <div style="font-size:1.2rem;font-weight:900;
+        {% if dash_total_remaining <= 0 %}color:#1e8449;{% else %}color:#c0392b;{% endif %}">
+        ₹{% if dash_total_remaining < 0 %}{{ dash_total_remaining|floatformat:0|slice:"1:" }}{% else %}{{ dash_total_remaining|floatformat:0 }}{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="grid2">
+
+  <!-- Earnings -->
+  <div class="card">
+    <h2>💰 Earnings — {{ selected_date|date:"d M Y" }}</h2>
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="action" value="save_earnings">
+      <div style="margin-bottom:12px">
+        <label style="font-size:.78rem;color:#666;font-weight:600;display:block;margin-bottom:4px">💵 Cash (₹)</label>
+        <input type="number" name="cash" step="0.01" min="0" value="{{ finance.cash }}" placeholder="0.00">
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%">Save Earnings</button>
+    </form>
+    <div style="margin-top:12px;border-top:1px solid #f0f0f0;padding-top:10px">
+      <div style="display:flex;justify-content:space-between;font-size:.84rem;color:#666;margin-bottom:4px"><span>💵 Cash</span><span>₹{{ finance.cash }}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:.9rem;font-weight:700;color:#2980b9;border-top:1px solid #eee;padding-top:8px;margin-top:6px">
+        <span>Total Earnings</span><span>₹{{ finance.total_earnings|floatformat:2 }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Zomato + Swiggy -->
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div class="card" style="background:linear-gradient(135deg,#fff8e1,#fef3cd);border:2px solid #e74c3c;padding:14px">
+      <h2 style="color:#c0392b;font-size:.9rem;margin-bottom:4px">🍕 Zomato</h2>
+      <div style="font-size:.74rem;color:#c0392b;margin-bottom:8px">Recorded separately — not added to earnings</div>
+      <form method="post" style="display:flex;gap:8px;align-items:flex-end">{% csrf_token %}
+        <input type="hidden" name="action" value="save_zomato">
+        <div style="flex:1">
+          <input type="number" name="zomato" step="0.01" min="0" value="{{ finance.zomato }}" placeholder="0.00" style="border-color:#e74c3c">
+        </div>
+        <button type="submit" class="btn btn-sm" style="background:#e74c3c;color:#fff;white-space:nowrap;flex-shrink:0">💾 Save</button>
+      </form>
+      <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
+        <a href="{% url 'zomato_report' %}" style="font-size:.76rem;color:#c0392b;text-decoration:underline">📊 View Report →</a>
+        <span style="font-size:1.3rem;font-weight:800;color:#c0392b">₹{{ finance.zomato|floatformat:0 }}</span>
+      </div>
+    </div>
+
+    <div class="card" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2);border:2px solid #f39c12;padding:14px">
+      <h2 style="color:#b7770d;font-size:.9rem;margin-bottom:4px">🛵 Swiggy</h2>
+      <div style="font-size:.74rem;color:#b7770d;margin-bottom:8px">Recorded separately — not added to earnings</div>
+      <form method="post" style="display:flex;gap:8px;align-items:flex-end">{% csrf_token %}
+        <input type="hidden" name="action" value="save_swiggy">
+        <div style="flex:1">
+          <input type="number" name="swiggy" step="0.01" min="0" value="{{ finance.swiggy }}" placeholder="0.00" style="border-color:#f39c12">
+        </div>
+        <button type="submit" class="btn btn-sm" style="background:#f39c12;color:#fff;white-space:nowrap;flex-shrink:0">💾 Save</button>
+      </form>
+      <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
+        <a href="{% url 'swiggy_report' %}" style="font-size:.76rem;color:#e67e22;text-decoration:underline">📊 View Report →</a>
+        <span style="font-size:1.3rem;font-weight:800;color:#e67e22">₹{{ finance.swiggy|floatformat:0 }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Expense Breakdown -->
+<div class="card">
+  <h2>📉 Expense Breakdown</h2>
+  <div class="grid2">
+    <!-- Left: summary -->
+    <div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f4f4f4;font-size:.86rem">
+        <span style="color:#555">🛒 Vendor Purchases</span>
+        <span style="font-weight:700;color:#e74c3c">₹{{ finance.total_vendor_expense|floatformat:2 }}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f4f4f4;font-size:.86rem">
+        <span style="color:#555">👥 Staff Salaries</span>
+        <span style="font-weight:700;color:#e74c3c">₹{{ finance.total_staff_cost|floatformat:2 }}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f4f4f4;font-size:.86rem">
+        <span style="color:#555">💳 Card Expense</span>
+        <span style="font-weight:700;color:#e74c3c">₹{{ finance.card_expense|floatformat:2 }}</span>
+      </div>
+      <!-- Incentives collapsible -->
+      <div style="padding:8px 0;border-bottom:1px solid #f4f4f4;font-size:.86rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleIncentives()">
+          <span style="color:#555">🎁 Incentives</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#e74c3c">₹{{ finance.total_incentives|floatformat:2 }}</span>
+            <span id="incentive-arrow" style="color:#888;font-size:.72rem">▼</span>
+          </div>
+        </div>
+        <div id="incentive-panel" style="display:none;margin-top:10px;background:#f9f9f9;border-radius:8px;padding:12px">
+          <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:.76rem;font-weight:700;color:#555">Manage Names</span>
+            <button onclick="toggleManageNames()" style="font-size:.72rem;background:#eee;border:none;border-radius:5px;padding:3px 8px;cursor:pointer">✏️ Edit</button>
+          </div>
+          <div id="manage-names-panel" style="display:none;margin-bottom:12px;border:1px dashed #ddd;border-radius:7px;padding:10px">
+            {% for iname in incentive_data %}
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <form method="post" style="display:flex;gap:4px;flex:1">{% csrf_token %}
+                <input type="hidden" name="action" value="rename_incentive_name">
+                <input type="hidden" name="incentive_name_id" value="{{ iname.name.id }}">
+                <input type="text" name="new_name" value="{{ iname.name.name }}" style="flex:1;font-size:.8rem;padding:5px 8px">
+                <button type="submit" class="btn btn-sm btn-green" style="padding:5px 8px">✓</button>
+              </form>
+              <form method="post" onsubmit="return confirm('Delete {{ iname.name.name }}?')">{% csrf_token %}
+                <input type="hidden" name="action" value="delete_incentive_name">
+                <input type="hidden" name="incentive_name_id" value="{{ iname.name.id }}">
+                <button type="submit" class="btn btn-danger btn-sm" style="padding:5px 8px">✕</button>
+              </form>
+            </div>
+            {% endfor %}
+            <form method="post" style="display:flex;gap:6px;margin-top:8px">{% csrf_token %}
+              <input type="hidden" name="action" value="add_incentive_name">
+              <input type="text" name="new_incentive_name" placeholder="Add new name" required style="flex:1;font-size:.82rem;padding:6px 8px">
+              <button type="submit" class="btn btn-green btn-sm">+ Add</button>
+            </form>
+          </div>
+          <form method="post">{% csrf_token %}
+            <input type="hidden" name="action" value="save_incentives">
+            {% for idata in incentive_data %}
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <span style="font-size:.84rem;font-weight:600;min-width:70px;color:#333">{{ idata.name.name }}</span>
+              <input type="number" name="incentive_{{ idata.name.id }}" step="0.01" min="0"
+                value="{{ idata.entry.amount }}" placeholder="0.00"
+                style="flex:1;padding:7px 10px;font-size:.84rem;border:1.5px solid #ddd;border-radius:6px;outline:none">
+            </div>
+            {% empty %}
+            <p style="color:#bbb;font-size:.8rem">No incentive names yet.</p>
+            {% endfor %}
+            {% if incentive_data %}
+            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:6px;font-size:.84rem">Save Incentives</button>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:.86rem">
+        <span style="color:#555">📦 Other Expenses</span>
+        <span style="font-weight:700;color:#e74c3c">₹{{ finance.other_expenses|floatformat:2 }}</span>
+      </div>
+      {% if finance.other_expenses_note %}
+      <div style="font-size:.74rem;color:#aaa;margin-top:-4px;margin-bottom:6px">Note: {{ finance.other_expenses_note }}</div>
+      {% endif %}
+      <div style="display:flex;justify-content:space-between;font-size:.92rem;font-weight:800;border-top:2px solid #eee;padding-top:8px;margin-top:4px">
+        <span>Total Deductions</span><span style="color:#e74c3c">₹{{ finance.total_deductions|floatformat:2 }}</span>
+      </div>
+    </div>
+
+    <!-- Right: forms -->
+    <div>
+      <form method="post">{% csrf_token %}
+        <input type="hidden" name="action" value="save_expenses">
+        <div style="margin-bottom:10px">
+          <label style="font-size:.78rem;color:#666;font-weight:600;display:block;margin-bottom:4px">💳 Card Expense (₹)</label>
+          <input type="number" name="card_expense" step="0.01" min="0" value="{{ finance.card_expense }}" placeholder="0.00">
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:.78rem;color:#666;font-weight:600;display:block;margin-bottom:4px">Other Expenses (₹)</label>
+          <input type="number" name="other_expenses" step="0.01" min="0" value="{{ finance.other_expenses }}" placeholder="0.00">
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="font-size:.78rem;color:#666;font-weight:600;display:block;margin-bottom:4px">Note (optional)</label>
+          <input type="text" name="other_expenses_note" value="{{ finance.other_expenses_note }}" placeholder="e.g. electricity bill">
+        </div>
+        <button type="submit" class="btn btn-danger" style="width:100%">Save Expenses</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Quick links -->
+<div class="grid3" style="margin-bottom:16px">
+  <a href="{% url 'vendors' %}" style="text-decoration:none">
+    <div class="card" style="text-align:center;cursor:pointer;transition:transform .15s;padding:18px 14px" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
+      <div style="font-size:1.8rem">🛒</div>
+      <div style="font-weight:700;margin-top:6px;font-size:.9rem">Vendor Purchases</div>
+      <div style="font-size:.74rem;color:#999;margin-top:3px">Add today's expenses</div>
+    </div>
+  </a>
+  <a href="{% url 'attendance' %}" style="text-decoration:none">
+    <div class="card" style="text-align:center;cursor:pointer;transition:transform .15s;padding:18px 14px" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
+      <div style="font-size:1.8rem">👥</div>
+      <div style="font-weight:700;margin-top:6px;font-size:.9rem">Staff Attendance</div>
+      <div style="font-size:.74rem;color:#999;margin-top:3px">Salary & attendance</div>
+    </div>
+  </a>
+  <a href="{% url 'export_csv' %}?date={{ selected_date|date:'Y-m-d' }}" style="text-decoration:none">
+    <div class="card" style="text-align:center;cursor:pointer;transition:transform .15s;padding:18px 14px" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
+      <div style="font-size:1.8rem">📥</div>
+      <div style="font-weight:700;margin-top:6px;font-size:.9rem">Export CSV</div>
+      <div style="font-size:.74rem;color:#999;margin-top:3px">Download report</div>
+    </div>
+  </a>
+</div>
+
+<!-- Net Profit Banner -->
+<div style="border-radius:12px;padding:20px;text-align:center;
+  background:{% if finance.net_profit >= 0 %}linear-gradient(135deg,#d5f5e3,#a9dfbf){% else %}linear-gradient(135deg,#fdecea,#f5b7b1){% endif %};
+  border:2px solid {% if finance.net_profit >= 0 %}#27ae60{% else %}#e74c3c{% endif %};margin-bottom:16px">
+  <div style="font-size:.78rem;font-weight:700;letter-spacing:1px;color:#555;margin-bottom:4px">
+    {{ selected_date|date:"d M Y" }} — NET PROFIT
+  </div>
+  <div style="font-size:2.6rem;font-weight:900;color:{% if finance.net_profit >= 0 %}#1e8449{% else %}#c0392b{% endif %}">
+    ₹{{ finance.net_profit|floatformat:2 }}
+  </div>
+  <div style="font-size:.78rem;color:#555;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap">
+    <span style="background:rgba(255,255,255,.6);border-radius:6px;padding:4px 10px">🔄 Carry Fwd<br><strong>₹{{ finance.carry_forward|floatformat:0 }}</strong></span>
+    <span>+</span>
+    <span style="background:rgba(255,255,255,.6);border-radius:6px;padding:4px 10px">💵 Cash<br><strong>₹{{ finance.cash|floatformat:0 }}</strong></span>
+    <span>−</span>
+    <span style="background:rgba(255,255,255,.6);border-radius:6px;padding:4px 10px">📉 Expenses<br><strong>₹{{ finance.total_deductions|floatformat:0 }}</strong></span>
+    <span>=</span>
+    <span style="background:rgba(255,255,255,.8);border-radius:6px;padding:4px 10px;font-weight:800">🏁 ₹{{ finance.net_profit|floatformat:0 }}</span>
+  </div>
+</div>
+
+<script>
+function toggleIncentives(){
+  var p=document.getElementById('incentive-panel'),a=document.getElementById('incentive-arrow');
+  p.style.display=p.style.display==='none'?'block':'none';
+  a.textContent=p.style.display==='block'?'▲':'▼';
+}
+function toggleManageNames(){
+  var p=document.getElementById('manage-names-panel');
+  p.style.display=p.style.display==='none'?'block':'none';
+}
+</script>
+{% endblock %}
